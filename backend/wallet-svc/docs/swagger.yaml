@@ -1,0 +1,896 @@
+basePath: /
+definitions:
+  internal_messaging.LifecycleEvent:
+    properties:
+      amount:
+        type: integer
+      app_id:
+        type: string
+      code:
+        type: string
+      event_type:
+        type: string
+      idempotency_key:
+        type: string
+      message:
+        type: string
+      order_id:
+        type: string
+      reason:
+        type: string
+      user_id:
+        type: string
+    type: object
+  internal_messaging.WalletMutationCommand:
+    properties:
+      amount:
+        example: 100
+        type: integer
+      app_id:
+        example: my-ott-app
+        type: string
+      idempotency_key:
+        example: order:ord-1:credit
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      order_id:
+        example: ord-1
+        type: string
+      reason:
+        enum:
+        - TOKEN_PURCHASE
+        - SPEND
+        example: TOKEN_PURCHASE
+        type: string
+      request_id:
+        example: corr-optional
+        type: string
+      user_id:
+        example: aaaaaaaaaaaaaaaaaaaaaaaa
+        type: string
+    type: object
+  wallet-svc_internal_dto.CreateWalletRequest:
+    properties:
+      user_id:
+        type: string
+    required:
+    - user_id
+    type: object
+  wallet-svc_internal_dto.FreezeRequest:
+    properties:
+      reason:
+        type: string
+    required:
+    - reason
+    type: object
+  wallet-svc_internal_dto.FundAppRequest:
+    properties:
+      amount:
+        type: integer
+      idempotency_key:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      order_id:
+        type: string
+    required:
+    - amount
+    - idempotency_key
+    - order_id
+    type: object
+  wallet-svc_internal_dto.MutationRequest:
+    properties:
+      amount:
+        type: integer
+      idempotency_key:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      order_id:
+        type: string
+      reason:
+        type: string
+    required:
+    - amount
+    - idempotency_key
+    - order_id
+    - reason
+    type: object
+  wallet-svc_pkg_response.ErrorEnvelope:
+    properties:
+      code:
+        type: string
+      errors: {}
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  wallet-svc_pkg_response.SuccessEnvelope:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Closed-loop in-app coin wallet with double-entry ledger. Internal service APIs only. Send Authorization: Bearer &lt;HS256 JWT signed with JWT_SECRET&gt; (claims: exp), required X-Scopes and X-App-Id, optional X-Request-ID (correlation).
+
+    RabbitMQ AMQP 1.0 (when RABBITMQ_ENABLED=true): Orders publishes credit/debit commands to x-consistent-hash exchange wallet.commands (RK=user_id). Op from reason (TOKEN_PURCHASE→credit, SPEND→debit). Success publishes wallet.credited|debited via outbox to wallet.events; permanent failures publish wallet.credit_failed|debit_failed then DLQ. HTTP credit/debit routes remain available. See tag "messaging".
+  title: wallet-svc API
+  version: "1.0"
+paths:
+  /admin/metrics:
+    get:
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: In-process counters
+      tags:
+      - admin
+  /admin/reconciliation:
+    get:
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Run balance invariant check
+      tags:
+      - admin
+  /admin/wallets/{user_id}/close:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: reason
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.FreezeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Close a wallet
+      tags:
+      - admin
+  /admin/wallets/{user_id}/freeze:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: reason
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.FreezeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Freeze a wallet
+      tags:
+      - admin
+  /admin/wallets/{user_id}/unfreeze:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: reason
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.FreezeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Unfreeze a wallet
+      tags:
+      - admin
+  /amqp/exchanges/wallet.commands/{user_id}:
+    post:
+      consumes:
+      - application/json
+      description: 'Orders publishes JSON to exchange wallet.commands (type x-consistent-hash)
+        with routing key = user_id. AMQP 1.0 address: /exchanges/wallet.commands/{user_id}.
+        Both credit and debit use this exchange; reason TOKEN_PURCHASE→Credit, SPEND→Debit.
+        Same-user messages stay on one shard queue and are processed in publish order.
+        No JWT; include app_id in the body.'
+      parameters:
+      - description: user id (also the consistent-hash routing key)
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: credit or debit command
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_messaging.WalletMutationCommand'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: accepted by broker (not an HTTP response)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: invalid body → wallet.commands.dlq after consume
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Publish wallet command via consistent-hash exchange (AMQP 1.0)
+      tags:
+      - messaging
+  /amqp/exchanges/wallet.events/{event_type}:
+    post:
+      consumes:
+      - application/json
+      description: Topic exchange wallet.events. Success events wallet.credited /
+        wallet.debited come from the DB outbox publisher. Permanent settle publishes
+        wallet.credit_failed / wallet.debit_failed before DLQ. Routing key = event_type.
+        Bound queue order.wallet.lifecycle (RK wallet.*) is consumed by order-svc.
+      parameters:
+      - description: wallet.credited|wallet.debited|wallet.credit_failed|wallet.debit_failed
+        in: path
+        name: event_type
+        required: true
+        type: string
+      - description: lifecycle event
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_messaging.LifecycleEvent'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: accepted by broker (not an HTTP response)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Publish wallet lifecycle event (AMQP 1.0)
+      tags:
+      - messaging
+  /amqp/queues/wallet.commands.dlq:
+    get:
+      consumes:
+      - application/json
+      description: Durable queue wallet.commands.dlq (address /queues/wallet.commands.dlq).
+        Body is the original WalletMutationCommand JSON. Application properties include
+        x-original-queue, x-dlq, x-op, x-error, x-failed-at. Consumed manually / by
+        ops tooling; wallet-svc does not reprocess DLQ automatically.
+      parameters:
+      - description: original failed command
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_messaging.WalletMutationCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message available on DLQ
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Commands dead-letter queue (AMQP 1.0)
+      tags:
+      - messaging
+  /amqp/queues/wallet.commands/{shard}:
+    get:
+      consumes:
+      - application/json
+      description: Durable queues wallet.commands.0 … wallet.commands.{N-1} bound
+        to wallet.commands with equal weight. wallet-svc consumes a subset via RABBITMQ_SHARD_INDEX
+        / RABBITMQ_SHARD_COUNT (shardID % COUNT == INDEX). One consumer per shard
+        among replicas; processed serially per queue.
+      parameters:
+      - description: shard id 0..SHARD_TOTAL-1
+        in: path
+        name: shard
+        required: true
+        type: integer
+      - description: routed command
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_messaging.WalletMutationCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message available on shard queue
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Shard command queue (AMQP 1.0)
+      tags:
+      - messaging
+  /internal/apps/fund:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: fund
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.FundAppRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Fund the app coin pool (CREDIT app + DEBIT mint)
+      tags:
+      - wallet
+  /internal/ledger/by-order/{order_id}:
+    get:
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: order id
+        in: path
+        name: order_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Lookup ledger by order id
+      tags:
+      - wallet
+  /internal/wallets:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.CreateWalletRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create wallet
+      tags:
+      - wallet
+  /internal/wallets/{user_id}:
+    get:
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get wallet balance
+      tags:
+      - wallet
+  /internal/wallets/{user_id}/credit:
+    post:
+      consumes:
+      - application/json
+      description: HTTP equivalent of AMQP publish to exchange wallet.commands (RK=user_id;
+        see messaging tag). reason must be TOKEN_PURCHASE; idempotency_key order:{order_id}:credit.
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: credit
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.MutationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Credit coins after verified payment (CREDIT user + DEBIT app)
+      tags:
+      - wallet
+  /internal/wallets/{user_id}/debit:
+    post:
+      consumes:
+      - application/json
+      description: HTTP equivalent of AMQP publish to exchange wallet.commands (RK=user_id;
+        see messaging tag). reason must be SPEND; idempotency_key order:{order_id}:debit.
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: debit
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/wallet-svc_internal_dto.MutationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Debit coins for a content spend (DEBIT user + CREDIT app)
+      tags:
+      - wallet
+  /internal/wallets/{user_id}/ledger:
+    get:
+      parameters:
+      - description: Bearer HS256 JWT signed with JWT_SECRET
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Comma/space-separated scopes (e.g. wallet:admin)
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: Request correlation id
+        in: header
+        name: X-Request-ID
+        type: string
+      - description: user id
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: cursor
+        in: query
+        name: cursor
+        type: string
+      - description: limit
+        in: query
+        name: limit
+        type: integer
+      - description: CREDIT or DEBIT
+        in: query
+        name: entry_type
+        type: string
+      - description: TOKEN_PURCHASE or SPEND
+        in: query
+        name: reason
+        type: string
+      - description: 'created_at direction: asc or desc (default desc)'
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/wallet-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List ledger entries
+      tags:
+      - wallet
+securityDefinitions:
+  BearerAuth:
+    description: Bearer HS256 JWT signed with JWT_SECRET, e.g. "Bearer eyJ..."
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

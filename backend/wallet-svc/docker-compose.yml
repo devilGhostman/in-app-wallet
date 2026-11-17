@@ -1,0 +1,113 @@
+services:
+  wallet-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wallet-svc
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      APP_NAME: wallet-svc
+      APP_ENV: development
+      PORT: 8080
+      ROUTE_PREFIX: /api/v1
+      DATABASE_URL: postgresql://wallet_app:wallet_app_password@postgres:5432/wallet?sslmode=disable
+      MIGRATE_DATABASE_URL: postgresql://wallet_migrate:wallet_migrate_password@postgres:5432/wallet?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: wallet.commands
+      RABBITMQ_QUEUE_PREFIX: wallet.commands
+      RABBITMQ_SHARD_TOTAL: "16"
+      RABBITMQ_SHARD_INDEX: "0"
+      RABBITMQ_SHARD_COUNT: "1"
+      RABBITMQ_COMMANDS_DLQ: wallet.commands.dlq
+      RABBITMQ_EVENTS_EXCHANGE: wallet.events
+      RABBITMQ_OUTBOX_POLL_INTERVAL: 1s
+      RABBITMQ_PUBLISH_TIMEOUT: 5s
+      LOG_LEVEL: debug
+      LOG_FORMAT: console
+      CORS_ALLOWED_ORIGINS: "*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    working_dir: /app
+    command: ["go", "run", "./cmd/migrate"]
+    environment:
+      APP_ENV: development
+      MIGRATE_DATABASE_URL: postgresql://wallet_migrate:wallet_migrate_password@postgres:5432/wallet?sslmode=disable
+      DATABASE_URL: postgresql://wallet_migrate:wallet_migrate_password@postgres:5432/wallet?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["migrate"]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: wallet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wallet
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wallet"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wallet-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.rabbitmq
+    image: inapp-wallet-rabbitmq:local
+    container_name: wallet-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./scripts/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "rabbitmq-plugins is_enabled rabbitmq_consistent_hash_exchange && rabbitmq-diagnostics -q ping",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

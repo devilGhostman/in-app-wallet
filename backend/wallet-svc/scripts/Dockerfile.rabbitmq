@@ -1,0 +1,9 @@
+# RabbitMQ with x-consistent-hash available before definitions import.
+# Official management image ships the plugin disabled; mounting enabled_plugins
+# alone is racy with management.load_definitions for type x-consistent-hash.
+FROM rabbitmq:4-management-alpine
+
+RUN rabbitmq-plugins enable --offline rabbitmq_consistent_hash_exchange
+
+COPY rabbitmq.conf /etc/rabbitmq/rabbitmq.conf
+COPY enabled_plugins /etc/rabbitmq/enabled_plugins

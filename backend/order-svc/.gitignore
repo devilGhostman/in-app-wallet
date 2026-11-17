@@ -1,0 +1,28 @@
+# Binaries
+bin/
+dist/
+/order
+
+# Air temporary build directory
+tmp/
+
+# Environment files
+.env
+.env.local
+
+# Dependency directories
+vendor/
+
+# Test coverage & profiling
+*.out
+*.test
+coverage.txt
+profile.pprof
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

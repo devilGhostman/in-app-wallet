@@ -1,0 +1,54 @@
+swagger: "2.0"
+info:
+  title: Gateway Service API
+  description: Edge gateway JWT auth, rate limit, reverse proxy to wallet-svc and order-svc.
+  version: "1.0"
+host: localhost:8081
+basePath: /api/v1
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      responses:
+        "200":
+          description: OK
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness probe (Redis)
+      responses:
+        "200":
+          description: OK
+        "503":
+          description: Redis unavailable
+  /internal/wallets:
+    get:
+      tags: [proxy]
+      summary: Proxy to wallet-svc
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Upstream response
+  /internal/orders:
+    post:
+      tags: [proxy]
+      summary: Proxy to order-svc
+      security:
+        - BearerAuth: []
+      responses:
+        "201":
+          description: Upstream response
+  /webhooks/payment:
+    post:
+      tags: [proxy]
+      summary: Payment webhook (auth bypass)
+      responses:
+        "200":
+          description: Upstream response
+securityDefinitions:
+  BearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header

@@ -1,0 +1,276 @@
+basePath: /
+definitions:
+  order-svc_internal_dto.CreateOrderRequest:
+    properties:
+      amount:
+        type: integer
+      idempotency_key:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      user_id:
+        type: string
+    required:
+    - amount
+    - idempotency_key
+    - user_id
+    type: object
+  order-svc_internal_dto.PaymentWebhookRequest:
+    properties:
+      amount:
+        type: integer
+      app_id:
+        type: string
+      order_id:
+        type: string
+      payment_ref:
+        type: string
+      status:
+        type: string
+    required:
+    - amount
+    - app_id
+    - order_id
+    - payment_ref
+    - status
+    type: object
+  order-svc_internal_dto.SimulatePaymentRequest:
+    properties:
+      order_id:
+        type: string
+    required:
+    - order_id
+    type: object
+  order-svc_internal_dto.SpendOrderRequest:
+    properties:
+      amount:
+        type: integer
+      idempotency_key:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      user_id:
+        type: string
+    required:
+    - amount
+    - idempotency_key
+    - user_id
+    type: object
+  order-svc_pkg_response.ErrorEnvelope:
+    properties:
+      code:
+        type: string
+      errors: {}
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  order-svc_pkg_response.SuccessEnvelope:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Order service for purchase (PSP → paid → TOKEN_PURCHASE credit) and
+    spend (no gateway → SPEND debit). Terminal status comes from wallet result events
+    (wallet.credited|debited|credit_failed|debit_failed) on queue order.wallet.lifecycle.
+  title: order-svc API
+  version: "1.0"
+paths:
+  /internal/orders:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: order:create
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: order
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/order-svc_internal_dto.CreateOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/order-svc_pkg_response.SuccessEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/order-svc_pkg_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create a purchase order
+      tags:
+      - orders
+  /internal/orders/{order_id}:
+    get:
+      parameters:
+      - description: Bearer HS256 JWT
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: order:read
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: order id
+        in: path
+        name: order_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/order-svc_pkg_response.SuccessEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get order by id
+      tags:
+      - orders
+  /internal/orders/spend:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: order:spend
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: spend
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/order-svc_internal_dto.SpendOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/order-svc_pkg_response.SuccessEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create a spend order (queues wallet SPEND debit; no payment gateway)
+      tags:
+      - orders
+  /internal/payments/simulate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer HS256 JWT
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: order:pay_simulate
+        in: header
+        name: X-Scopes
+        required: true
+        type: string
+      - description: Application id
+        in: header
+        name: X-App-Id
+        required: true
+        type: string
+      - description: simulate
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/order-svc_internal_dto.SimulatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/order-svc_pkg_response.SuccessEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Fake payment gateway — POSTs signed webhook
+      tags:
+      - payments
+  /webhooks/payment:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: hex HMAC-SHA256 of raw body
+        in: header
+        name: X-Payment-Signature
+        required: true
+        type: string
+      - description: webhook
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/order-svc_internal_dto.PaymentWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/order-svc_pkg_response.SuccessEnvelope'
+      summary: Payment webhook (HMAC X-Payment-Signature)
+      tags:
+      - webhooks
+securityDefinitions:
+  BearerAuth:
+    description: Bearer HS256 JWT signed with JWT_SECRET
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

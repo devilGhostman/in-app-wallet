@@ -1,0 +1,288 @@
+{
+  "exchanges": [
+    {
+      "name": "wallet.commands",
+      "vhost": "/",
+      "type": "x-consistent-hash",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "wallet.commands.0",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.1",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.2",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.3",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.4",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.5",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.6",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.7",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.8",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.9",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.10",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.11",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.12",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.13",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.14",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.15",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "wallet.commands.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "order.wallet.lifecycle",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.0",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.1",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.2",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.3",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.4",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.5",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.6",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.7",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.8",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.9",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.10",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.11",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.12",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.13",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.14",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.commands",
+      "vhost": "/",
+      "destination": "wallet.commands.15",
+      "destination_type": "queue",
+      "routing_key": "1",
+      "arguments": {}
+    },
+    {
+      "source": "wallet.events",
+      "vhost": "/",
+      "destination": "order.wallet.lifecycle",
+      "destination_type": "queue",
+      "routing_key": "wallet.*",
+      "arguments": {}
+    }
+  ]
+}

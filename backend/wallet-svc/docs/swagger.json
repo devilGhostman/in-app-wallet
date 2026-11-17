@@ -1,0 +1,1334 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Closed-loop in-app coin wallet with double-entry ledger. Internal service APIs only. Send Authorization: Bearer \u0026lt;HS256 JWT signed with JWT_SECRET\u0026gt; (claims: exp), required X-Scopes and X-App-Id, optional X-Request-ID (correlation).\n\nRabbitMQ AMQP 1.0 (when RABBITMQ_ENABLED=true): Orders publishes credit/debit commands to x-consistent-hash exchange wallet.commands (RK=user_id). Op from reason (TOKEN_PURCHASE→credit, SPEND→debit). Success publishes wallet.credited|debited via outbox to wallet.events; permanent failures publish wallet.credit_failed|debit_failed then DLQ. HTTP credit/debit routes remain available. See tag \"messaging\".",
+        "title": "wallet-svc API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/admin/metrics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "In-process counters",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/reconciliation": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Run balance invariant check",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/wallets/{user_id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Close a wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "reason",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.FreezeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/wallets/{user_id}/freeze": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Freeze a wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "reason",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.FreezeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/wallets/{user_id}/unfreeze": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Unfreeze a wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "reason",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.FreezeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/amqp/exchanges/wallet.commands/{user_id}": {
+            "post": {
+                "description": "Orders publishes JSON to exchange wallet.commands (type x-consistent-hash) with routing key = user_id. AMQP 1.0 address: /exchanges/wallet.commands/{user_id}. Both credit and debit use this exchange; reason TOKEN_PURCHASE→Credit, SPEND→Debit. Same-user messages stay on one shard queue and are processed in publish order. No JWT; include app_id in the body.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messaging"
+                ],
+                "summary": "Publish wallet command via consistent-hash exchange (AMQP 1.0)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "user id (also the consistent-hash routing key)",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "credit or debit command",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_messaging.WalletMutationCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "accepted by broker (not an HTTP response)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid body → wallet.commands.dlq after consume",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/amqp/exchanges/wallet.events/{event_type}": {
+            "post": {
+                "description": "Topic exchange wallet.events. Success events wallet.credited / wallet.debited come from the DB outbox publisher. Permanent settle publishes wallet.credit_failed / wallet.debit_failed before DLQ. Routing key = event_type. Bound queue order.wallet.lifecycle (RK wallet.*) is consumed by order-svc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messaging"
+                ],
+                "summary": "Publish wallet lifecycle event (AMQP 1.0)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "wallet.credited|wallet.debited|wallet.credit_failed|wallet.debit_failed",
+                        "name": "event_type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "lifecycle event",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_messaging.LifecycleEvent"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "accepted by broker (not an HTTP response)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/amqp/queues/wallet.commands.dlq": {
+            "get": {
+                "description": "Durable queue wallet.commands.dlq (address /queues/wallet.commands.dlq). Body is the original WalletMutationCommand JSON. Application properties include x-original-queue, x-dlq, x-op, x-error, x-failed-at. Consumed manually / by ops tooling; wallet-svc does not reprocess DLQ automatically.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messaging"
+                ],
+                "summary": "Commands dead-letter queue (AMQP 1.0)",
+                "parameters": [
+                    {
+                        "description": "original failed command",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_messaging.WalletMutationCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "message available on DLQ",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/amqp/queues/wallet.commands/{shard}": {
+            "get": {
+                "description": "Durable queues wallet.commands.0 … wallet.commands.{N-1} bound to wallet.commands with equal weight. wallet-svc consumes a subset via RABBITMQ_SHARD_INDEX / RABBITMQ_SHARD_COUNT (shardID % COUNT == INDEX). One consumer per shard among replicas; processed serially per queue.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messaging"
+                ],
+                "summary": "Shard command queue (AMQP 1.0)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "shard id 0..SHARD_TOTAL-1",
+                        "name": "shard",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "routed command",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_messaging.WalletMutationCommand"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "message available on shard queue",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/apps/fund": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "Fund the app coin pool (CREDIT app + DEBIT mint)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "description": "fund",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.FundAppRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/ledger/by-order/{order_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "Lookup ledger by order id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "order id",
+                        "name": "order_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/wallets": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "Create wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "description": "user",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.CreateWalletRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/wallets/{user_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "Get wallet balance",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/wallets/{user_id}/credit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "HTTP equivalent of AMQP publish to exchange wallet.commands (RK=user_id; see messaging tag). reason must be TOKEN_PURCHASE; idempotency_key order:{order_id}:credit.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "Credit coins after verified payment (CREDIT user + DEBIT app)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "credit",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.MutationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/wallets/{user_id}/debit": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "HTTP equivalent of AMQP publish to exchange wallet.commands (RK=user_id; see messaging tag). reason must be SPEND; idempotency_key order:{order_id}:debit.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "Debit coins for a content spend (DEBIT user + CREDIT app)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "debit",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_internal_dto.MutationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/wallets/{user_id}/ledger": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallet"
+                ],
+                "summary": "List ledger entries",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT signed with JWT_SECRET",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma/space-separated scopes (e.g. wallet:admin)",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Request correlation id",
+                        "name": "X-Request-ID",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "user id",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "CREDIT or DEBIT",
+                        "name": "entry_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "TOKEN_PURCHASE or SPEND",
+                        "name": "reason",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "created_at direction: asc or desc (default desc)",
+                        "name": "sort",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/wallet-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "internal_messaging.LifecycleEvent": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "app_id": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_messaging.WalletMutationCommand": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "app_id": {
+                    "type": "string",
+                    "example": "my-ott-app"
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "example": "order:ord-1:credit"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string",
+                    "example": "ord-1"
+                },
+                "reason": {
+                    "type": "string",
+                    "enum": [
+                        "TOKEN_PURCHASE",
+                        "SPEND"
+                    ],
+                    "example": "TOKEN_PURCHASE"
+                },
+                "request_id": {
+                    "type": "string",
+                    "example": "corr-optional"
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "aaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+            }
+        },
+        "wallet-svc_internal_dto.CreateWalletRequest": {
+            "type": "object",
+            "required": [
+                "user_id"
+            ],
+            "properties": {
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "wallet-svc_internal_dto.FreezeRequest": {
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "wallet-svc_internal_dto.FundAppRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "idempotency_key",
+                "order_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "wallet-svc_internal_dto.MutationRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "idempotency_key",
+                "order_id",
+                "reason"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "wallet-svc_pkg_response.ErrorEnvelope": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "errors": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "wallet-svc_pkg_response.SuccessEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Bearer HS256 JWT signed with JWT_SECRET, e.g. \"Bearer eyJ...\"",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

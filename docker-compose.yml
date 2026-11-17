@@ -1,0 +1,236 @@
+# Full local stack: infra + wallet-svc + order-svc + gateway-svc
+# Usage:
+#   docker-compose up -d --build
+#   docker-compose --profile migrate run --rm wallet-migrate
+#   docker-compose --profile migrate run --rm order-migrate
+#   docker-compose up -d wallet-svc order-svc gateway-svc
+
+name: inapp-wallet
+
+x-jwt-secret: &jwt_secret dev-only-jwt-secret-change-me-now!!!!!!
+
+services:
+  # ── Infrastructure ──────────────────────────────────────────────
+  wallet-postgres:
+    image: postgres:16-alpine
+    container_name: inapp-wallet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wallet
+    ports:
+      - "5432:5432"
+    volumes:
+      - wallet_pgdata:/var/lib/postgresql/data
+      - ./backend/wallet-svc/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wallet"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  order-postgres:
+    image: postgres:16-alpine
+    container_name: inapp-order-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: orders
+    ports:
+      - "5433:5432"
+    volumes:
+      - order_pgdata:/var/lib/postgresql/data
+      - ./backend/order-svc/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orders"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: inapp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    build:
+      context: ./backend/wallet-svc/scripts
+      dockerfile: Dockerfile.rabbitmq
+    image: inapp-wallet-rabbitmq:local
+    container_name: inapp-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./backend/wallet-svc/scripts/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "rabbitmq-plugins is_enabled rabbitmq_consistent_hash_exchange && rabbitmq-diagnostics -q ping",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Migrations (profile: migrate) ───────────────────────────────
+  wallet-migrate:
+    build:
+      context: ./backend/wallet-svc
+      dockerfile: Dockerfile
+      target: builder
+    working_dir: /app
+    command: ["go", "run", "./cmd/migrate"]
+    environment:
+      APP_ENV: development
+      MIGRATE_DATABASE_URL: postgresql://wallet_migrate:wallet_migrate_password@wallet-postgres:5432/wallet?sslmode=disable
+      DATABASE_URL: postgresql://wallet_migrate:wallet_migrate_password@wallet-postgres:5432/wallet?sslmode=disable
+    depends_on:
+      wallet-postgres:
+        condition: service_healthy
+    profiles: ["migrate"]
+
+  order-migrate:
+    build:
+      context: ./backend/order-svc
+      dockerfile: Dockerfile
+      target: builder
+    working_dir: /app
+    command: ["go", "run", "./cmd/migrate"]
+    environment:
+      APP_ENV: development
+      MIGRATE_DATABASE_URL: postgresql://order_migrate:order_migrate_password@order-postgres:5432/orders?sslmode=disable
+      DATABASE_URL: postgresql://order_migrate:order_migrate_password@order-postgres:5432/orders?sslmode=disable
+    depends_on:
+      order-postgres:
+        condition: service_healthy
+    profiles: ["migrate"]
+
+  # ── Application services ────────────────────────────────────────
+  wallet-svc:
+    build:
+      context: ./backend/wallet-svc
+      dockerfile: Dockerfile
+    container_name: inapp-wallet-svc
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      APP_NAME: wallet-svc
+      APP_ENV: development
+      PORT: 8080
+      ROUTE_PREFIX: /api/v1
+      JWT_SECRET: *jwt_secret
+      DATABASE_URL: postgresql://wallet_app:wallet_app_password@wallet-postgres:5432/wallet?sslmode=disable
+      MIGRATE_DATABASE_URL: postgresql://wallet_migrate:wallet_migrate_password@wallet-postgres:5432/wallet?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: wallet.commands
+      RABBITMQ_QUEUE_PREFIX: wallet.commands
+      RABBITMQ_SHARD_TOTAL: "16"
+      RABBITMQ_SHARD_INDEX: "0"
+      RABBITMQ_SHARD_COUNT: "1"
+      RABBITMQ_COMMANDS_DLQ: wallet.commands.dlq
+      RABBITMQ_EVENTS_EXCHANGE: wallet.events
+      RABBITMQ_OUTBOX_POLL_INTERVAL: 1s
+      RABBITMQ_PUBLISH_TIMEOUT: 5s
+      LOG_LEVEL: info
+      LOG_FORMAT: console
+      CORS_ALLOWED_ORIGINS: "*"
+      USER_ID_PATTERN: "^[a-fA-F0-9]{24}$"
+    depends_on:
+      wallet-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  order-svc:
+    build:
+      context: ./backend/order-svc
+      dockerfile: Dockerfile
+    container_name: inapp-order-svc
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      APP_NAME: order-svc
+      APP_ENV: development
+      PORT: 8082
+      ROUTE_PREFIX: /api/v1
+      JWT_SECRET: *jwt_secret
+      DATABASE_URL: postgresql://order_app:order_app_password@order-postgres:5432/orders?sslmode=disable
+      MIGRATE_DATABASE_URL: postgresql://order_migrate:order_migrate_password@order-postgres:5432/orders?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: wallet.commands
+      RABBITMQ_EVENTS_QUEUE: order.wallet.lifecycle
+      RABBITMQ_OUTBOX_POLL_INTERVAL: 1s
+      RABBITMQ_PUBLISH_TIMEOUT: 5s
+      PAYMENT_WEBHOOK_SECRET: dev-only-payment-webhook-secret!!!!!
+      PAYMENT_WEBHOOK_URL: http://order-svc:8082/api/v1/webhooks/payment
+      LOG_LEVEL: info
+      LOG_FORMAT: console
+      CORS_ALLOWED_ORIGINS: "*"
+      USER_ID_PATTERN: "^[a-fA-F0-9]{24}$"
+    depends_on:
+      order-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  gateway-svc:
+    build:
+      context: ./backend/gateway-svc
+      dockerfile: Dockerfile
+    container_name: inapp-gateway-svc
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      APP_NAME: gateway-svc
+      APP_ENV: development
+      PORT: 8081
+      ROUTE_PREFIX: /api/v1
+      JWT_SECRET: *jwt_secret
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_CAPACITY: "60"
+      RATE_LIMIT_REFILL: 1s
+      WALLET_UPSTREAM: http://wallet-svc:8080
+      ORDER_UPSTREAM: http://order-svc:8082
+      PROXY_TIMEOUT: 5s
+      PROXY_MAX_RETRIES: "2"
+      BREAKER_FAILURES: "5"
+      BREAKER_OPEN_TIMEOUT: 10s
+      CORS_ALLOWED_ORIGINS: "*"
+      LOG_LEVEL: info
+      LOG_FORMAT: console
+    depends_on:
+      redis:
+        condition: service_healthy
+      wallet-svc:
+        condition: service_started
+      order-svc:
+        condition: service_started
+
+volumes:
+  wallet_pgdata:
+  order_pgdata:

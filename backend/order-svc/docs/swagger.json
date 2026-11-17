@@ -1,0 +1,416 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Order service for purchase (PSP → paid → TOKEN_PURCHASE credit) and spend (no gateway → SPEND debit). Terminal status comes from wallet result events (wallet.credited|debited|credit_failed|debit_failed) on queue order.wallet.lifecycle.",
+        "title": "order-svc API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/internal/orders": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Create a purchase order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "order:create",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "order",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_internal_dto.CreateOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_pkg_response.SuccessEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_pkg_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/orders/spend": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Create a spend order (queues wallet SPEND debit; no payment gateway)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "order:spend",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "spend",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_internal_dto.SpendOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_pkg_response.SuccessEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/orders/{order_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Get order by id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "order:read",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "order id",
+                        "name": "order_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_pkg_response.SuccessEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/internal/payments/simulate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "Fake payment gateway — POSTs signed webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer HS256 JWT",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "order:pay_simulate",
+                        "name": "X-Scopes",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "X-App-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "simulate",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_internal_dto.SimulatePaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_pkg_response.SuccessEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/payment": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "Payment webhook (HMAC X-Payment-Signature)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "hex HMAC-SHA256 of raw body",
+                        "name": "X-Payment-Signature",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "webhook",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_internal_dto.PaymentWebhookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/order-svc_pkg_response.SuccessEnvelope"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "order-svc_internal_dto.CreateOrderRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "idempotency_key",
+                "user_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "order-svc_internal_dto.PaymentWebhookRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "app_id",
+                "order_id",
+                "payment_ref",
+                "status"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "app_id": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "payment_ref": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "order-svc_internal_dto.SimulatePaymentRequest": {
+            "type": "object",
+            "required": [
+                "order_id"
+            ],
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "order-svc_internal_dto.SpendOrderRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "idempotency_key",
+                "user_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "order-svc_pkg_response.ErrorEnvelope": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "errors": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "order-svc_pkg_response.SuccessEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Bearer HS256 JWT signed with JWT_SECRET",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

@@ -1,0 +1,106 @@
+services:
+  order-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: order-svc
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      APP_NAME: order-svc
+      APP_ENV: development
+      PORT: 8082
+      ROUTE_PREFIX: /api/v1
+      DATABASE_URL: postgresql://order_app:order_app_password@postgres:5432/orders?sslmode=disable
+      MIGRATE_DATABASE_URL: postgresql://order_migrate:order_migrate_password@postgres:5432/orders?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: wallet.commands
+      PAYMENT_WEBHOOK_URL: http://order-svc:8082/api/v1/webhooks/payment
+      LOG_LEVEL: debug
+      LOG_FORMAT: console
+      CORS_ALLOWED_ORIGINS: "*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    working_dir: /app
+    command: ["go", "run", "./cmd/migrate"]
+    environment:
+      APP_ENV: development
+      MIGRATE_DATABASE_URL: postgresql://order_migrate:order_migrate_password@postgres:5432/orders?sslmode=disable
+      DATABASE_URL: postgresql://order_migrate:order_migrate_password@postgres:5432/orders?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["migrate"]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: order-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: orders
+    ports:
+      - "5433:5432"
+    volumes:
+      - order_pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orders"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: order-redis
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    build:
+      context: ../wallet-svc/scripts
+      dockerfile: Dockerfile.rabbitmq
+    image: inapp-wallet-rabbitmq:local
+    container_name: order-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ../wallet-svc/scripts/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "rabbitmq-plugins is_enabled rabbitmq_consistent_hash_exchange && rabbitmq-diagnostics -q ping",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  order_pgdata:
